@@ -1,0 +1,30 @@
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# IDE files
+.idea/
+.vscode/
+
+# Large trained models
+models/*.keras
+models/*.h5
+models/*.hdf5
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db

@@ -1,0 +1,274 @@
+{
+    "Baked Potato": {
+        "source": "https://www.eatthismuch.com/calories/baked-potato-2101",
+        "calories": "93 kcal",
+        "protein": "2 g",
+        "carbohydrates": "22 g",
+        "fat": "0.1 g",
+        "fiber": "2 g"
+    },
+    "Crispy Chicken": {
+        "source": "https://www.eatbetter.app/en/food/crispy-chicken",
+        "calories": "250 kcal",
+        "protein": "18 g",
+        "carbohydrates": "14 g",
+        "fat": "13 g",
+        "fiber": "0.7 g"
+    },
+    "Donut": {
+        "source": "https://foods.fatsecret.com/calories-nutrition/generic/doughnut?portionid=52897&portionamount=100.000",
+        "calories": "412 kcal",
+        "protein": "5.7 g",
+        "carbohydrates": "47 g",
+        "fat": "22.85 g",
+        "fiber": "1.6 g"
+    },
+    "Fries": {
+        "source": "https://indianpotato.com/french-fries-nutrition-comprehensive-analysis/",
+        "calories": "312 kcal",
+        "protein": "3.4 g",
+        "carbohydrates": "41 g",
+        "fat": "15 g",
+        "fiber": "3.8 g"
+    },
+    "Hot Dog": {
+        "source": "https://www.eatthismuch.com/calories/hot-dog-5036?a=1.0204081632653061%3A0",
+        "calories": "247 kcal",
+        "protein": "11 g",
+        "carbohydrates": "18 g",
+        "fat": "15 g",
+        "fiber": "0 g"
+    },
+    "Sandwich": {
+        "source": "https://www.eatbetter.app/en/food/sandwich",
+        "calories": "250 kcal",
+        "protein": "8 g",
+        "carbohydrates": "35 g",
+        "fat": "8 g",
+        "fiber": "2.5 g"
+    },
+    "Taco": {
+        "source": "https://www.eatthismuch.com/calories/taco-440359?a=0.9803921568627451%3A0",
+        "calories": "206 kcal",
+        "protein": "9 g",
+        "carbohydrates": "20 g",
+        "fat": "10 g",
+        "fiber": "3 g"
+    },
+    "Taquito": {
+        "source": "https://www.prospre.io/ingredients/taquitos-130348",
+        "calories": "259 kcal",
+        "protein": "9.4 g",
+        "carbohydrates": "30.6 g",
+        "fat": "11.8 g",
+        "fiber": "1.2 g"
+    },
+    "apple_pie": {
+        "source": "https://www.eatthismuch.com/calories/apple-pie-4216?a=0.6451612903225806%3A0",
+        "calories": "265 kcal",
+        "protein": "2 g",
+        "carbohydrates": "37 g",
+        "fat": "13 g",
+        "fiber": "0 g"
+    },
+    "burger": {
+        "source": "https://www.eatthismuch.com/calories/hamburger-440339?a=0.5847953216374269%3A0",
+        "calories": "256 kcal",
+        "protein": "16 g",
+        "carbohydrates": "22 g",
+        "fat": "12 g",
+        "fiber": "1 g"
+    },
+    "butter_naan": {
+        "source": "https://clearcals.com/recipes/butter-naan",
+        "calories": "339.4 kcal",
+        "protein": "6.0 g",
+        "carbohydrates": "40.7 g",
+        "fat": "16.9 g",
+        "fiber": "1.5 g"
+    },
+    "chai": {
+        "source": "https://www.fatsecret.co.in/calories-nutrition/generic/chai?portionid=10211785&portionamount=100.000",
+        "calories": "30 kcal",
+        "protein": "0.53 g",
+        "carbohydrates": "6.12 g",
+        "fat": "0.53 g",
+        "fiber": "0 g"
+    },
+    "chapati": {
+        "source": "https://www.fatsecret.co.in/calories-nutrition/generic/roti?portionid=333753&portionamount=100.000",
+        "calories": "264 kcal",
+        "protein": "9.61 g",
+        "carbohydrates": "55.81 g",
+        "fat": "1.3 g",
+        "fiber": "5.5 g"
+    },
+    "cheesecake": {
+        "source": "https://www.eatthismuch.com/calories/cheesecake-4074?a=1.25%3A0",
+        "calories": "321 kcal",
+        "protein": "6 g",
+        "carbohydrates": "26 g",
+        "fat": "23 g",
+        "fiber": "0.4 g"
+    },
+    "chicken_curry": {
+        "source": "https://clearcals.com/recipes/chicken-curry",
+        "calories": "131.9 kcal",
+        "protein": "17.4 g",
+        "carbohydrates": "1.6 g",
+        "fat": "6.2 g",
+        "fiber": "0.8 g"
+    },
+    "chole_bhature": {
+        "source": "https://hitungkalori.com/in/calories/chole-bhature/",
+        "calories": "270 kcal",
+        "protein": "9.0 g",
+        "carbohydrates": "38.0 g",
+        "fat": "9.0 g",
+        "fiber": "3.5 g"
+    },
+    "dal_makhani": {
+        "source": "https://clearcals.com/recipes/dal-makhani",
+        "calories": "85.5 kcal",
+        "protein": "4.0 g",
+        "carbohydrates": "10.1 g",
+        "fat": "3.3 g",
+        "fiber": "4.1 g"
+    },
+    "dhokla": {
+        "source": "https://clearcals.com/recipes/dhokla",
+        "calories": "268.0 kcal",
+        "protein": "11.4 g",
+        "carbohydrates": "33.2 g",
+        "fat": "10.0 g",
+        "fiber": "6.7 g"
+    },
+    "fried_rice": {
+        "source": "https://www.eatthismuch.com/calories/fried-rice-5664?a=0.7142857142857143%3A0",
+        "calories": "174 kcal",
+        "protein": "4 g",
+        "carbohydrates": "33 g",
+        "fat": "3 g",
+        "fiber": "1 g"
+    },
+    "ice_cream": {
+        "source": "https://www.recipal.com/ingredients/378693-nutrition-facts-calories-protein-carbs-fat-ice-cream-base",
+        "calories": "217 kcal",
+        "protein": "4 g",
+        "carbohydrates": "23 g",
+        "fat": "13 g",
+        "fiber": "0 g"
+    },
+    "idli": {
+        "source": "https://clearcals.com/blogs/idli-calories-nutrition-and-health-benefits",
+        "calories": "203 kcal",
+        "protein": "7.7 g",
+        "carbohydrates": "41.7 g",
+        "fat": "0.7 g",
+        "fiber": "0 g"
+    },
+    "jalebi": {
+        "source": "https://clearcals.com/recipes/jalebi",
+        "calories": "316.8 kcal",
+        "protein": "3.4 g",
+        "carbohydrates": "44.6 g",
+        "fat": "13.8 g",
+        "fiber": "1.3 g"
+    },
+    "kaathi_rolls": {
+        "source": "https://hitungkalori.com/in/calories/kathi-roll/",
+        "calories": "247 kcal",
+        "protein": "12.0 g",
+        "carbohydrates": "25.0 g",
+        "fat": "11.0 g",
+        "fiber": "2.2 g"
+    },
+    "kadai_paneer": {
+        "source": "https://clearcals.com/recipes/kadai-paneer",
+        "calories": "122.5 kcal",
+        "protein": "4.2 g",
+        "carbohydrates": "5.9 g",
+        "fat": "9.1 g",
+        "fiber": "2.7 g"
+    },
+    "kulfi": {
+        "source": "https://www.fatsecret.co.in/calories-nutrition/generic/kulfi?portionid=8128005&portionamount=100.000",
+        "calories": "227 kcal",
+        "protein": "4 g",
+        "carbohydrates": "26.28 g",
+        "fat": "12.59 g",
+        "fiber": "0 g"
+    },
+    "masala_dosa": {
+        "source": "https://clearcals.com/recipes/masala-dosa",
+        "calories": "262.8 kcal",
+        "protein": "7.0 g",
+        "carbohydrates": "36.3 g",
+        "fat": "10.0 g",
+        "fiber": "4.3 g"
+    },
+    "momos": {
+        "source": "https://hitungkalori.com/in/calories/momos/",
+        "calories": "135 kcal",
+        "protein": "7.0 g",
+        "carbohydrates": "18.0 g",
+        "fat": "4.5 g",
+        "fiber": "2 g"
+    },
+    "omelette": {
+        "source": "https://www.prospre.io/ingredients/omelet-with-meat-and-vegetables-10167",
+        "calories": "160.9 kcal",
+        "protein": "12.7 g",
+        "carbohydrates": "2.8 g",
+        "fat": "10.8 g",
+        "fiber": "0.16 g"
+    },
+    "paani_puri": {
+        "source": "https://www.fatsecret.co.in/calories-nutrition/generic/pani-puri?portionid=5589545&portionamount=100.000",
+        "calories": "307 kcal",
+        "protein": "6.09 g",
+        "carbohydrates": "52.76 g",
+        "fat": "12.82 g",
+        "fiber": "3.5 g"
+    },
+    "pakode": {
+        "source": "https://hitungkalori.com/in/calories/pakoda/",
+        "calories": "290 kcal",
+        "protein": "9.0 g",
+        "carbohydrates": "34.0 g",
+        "fat": "16.0 g",
+        "fiber": "2.4 g"
+    },
+    "pav_bhaji": {
+        "source": "https://www.fatsecret.co.in/calories-nutrition/generic/pav-bhaji?portionid=5861166&portionamount=100.000",
+        "calories": "107 kcal",
+        "protein": "2.17 g",
+        "carbohydrates": "12.03 g",
+        "fat": "6.03 g",
+        "fiber": "2.4 g"
+    },
+    "pizza": {
+        "source": "https://www.eatthismuch.com/calories/pizza-5126?a=0.7352941176470589%3A0",
+        "calories": "244 kcal",
+        "protein": "11 g",
+        "carbohydrates": "25 g",
+        "fat": "11 g",
+        "fiber": "2 g"
+    },
+    "samosa": {
+        "source": "https://www.mealstack.io/foods/samosa",
+        "calories": "260 kcal",
+        "protein": "4.0 g",
+        "carbohydrates": "30 g",
+        "fat": "14 g",
+        "fiber": "2 g"
+    },
+    "sushi": {
+        "source": "https://www.prospre.io/ingredients/sushi-11274",
+        "calories": "93.3 kcal",
+        "protein": "3.0 g",
+        "carbohydrates": "18.3 g",
+        "fat": "0.67 g",
+        "fiber": "1.0 g"
+    }
+}

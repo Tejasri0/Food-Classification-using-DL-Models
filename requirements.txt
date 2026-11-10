@@ -1,0 +1,12 @@
+werkzeug>=3.0
+Flask
+tensorflow
+numpy
+Pillow
+redis
+gunicorn
+huggingface_hub
+
+# Needed only once you plug in real trained models (demo mode works without them):
+# tensorflow>=2.15
+# numpy

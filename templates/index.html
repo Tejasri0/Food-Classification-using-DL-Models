@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Food Image Classification</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+</head>
+<body>
+
+<div class="app">
+
+  <header class="hero">
+    <span class="hero__mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 2C7 2 4 6 4 11c0 5.5 4.2 10 8 11 3.8-1 8-5.5 8-11 0-5-3-9-8-9z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+        <path d="M12 7v9M8.5 10.5 12 7l3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </span>
+    <div class="hero__text">
+      <h1 class="hero__title">Food Image Classification</h1>
+      <p class="hero__subtitle">Upload a photo, pick a model, compare it against the true class</p>
+    </div>
+  </header>
+
+  <!-- ============================= WORKSPACE ============================= -->
+  <main class="workspace">
+
+    <!-- ---- LEFT: profile + nutrition ---- -->
+    <section class="panel panel--left" aria-label="Profile and nutrition facts">
+
+      <div class="profile-card">
+        <div class="avatar">
+          <!--
+            Set your profile picture here — just change this path
+            to point at your own image (e.g. an image in static/img/).
+          -->
+          <img
+            id="avatarImg"
+            class="avatar__img"
+            src="{{ url_for('static', filename='Tejasi_black.png') }}"
+            alt="K. Tejasri"
+            onerror="this.hidden=true; document.getElementById('avatarDefault').style.display='block';"
+          />
+          <svg id="avatarDefault" class="avatar__default" viewBox="0 0 96 96" width="96" height="96" style="display:none;">
+            <circle cx="48" cy="48" r="48" fill="url(#avatarGrad)"/>
+            <circle cx="48" cy="40" r="16" fill="rgba(255,255,255,0.92)"/>
+            <path d="M18 88c3-18 17-28 30-28s27 10 30 28" fill="rgba(255,255,255,0.92)"/>
+            <defs>
+              <linearGradient id="avatarGrad" x1="0" y1="0" x2="96" y2="96" gradientUnits="userSpaceOnUse">
+                <stop offset="0" stop-color="#2F6B4F"/>
+                <stop offset="1" stop-color="#1E4B37"/>
+              </linearGradient>
+            </defs>
+          </svg>
+          <span class="avatar__badge">KT</span>
+        </div>
+        <h2 class="profile-card__name">K. Tejasri</h2>
+        <p class="profile-card__role">Data Scientist</p>
+      </div>
+
+      <div class="nutrition-zone" id="nutritionZone">
+        <span class="field-group__label field-group__label--center">Nutrition facts</span>
+        <div class="split-placeholder" id="nutritionPlaceholder">
+          <div class="split-placeholder__card split-placeholder__card--actual">
+            <div class="split-placeholder__eyebrow"><span class="dot"></span>Actual class</div>
+            <svg class="split-placeholder__glyph" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <rect x="6" y="4" width="28" height="32" rx="3" stroke="currentColor" stroke-width="1.6"/>
+              <path d="M11 12h18M11 18h18M11 24h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+            <p>Nutrition facts for the class you select will appear here</p>
+          </div>
+          <div class="split-placeholder__card split-placeholder__card--predicted">
+            <div class="split-placeholder__eyebrow"><span class="dot"></span>Predicted class</div>
+            <svg class="split-placeholder__glyph" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <rect x="6" y="4" width="28" height="32" rx="3" stroke="currentColor" stroke-width="1.6"/>
+              <path d="M11 12h18M11 18h18M11 24h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+            <p>Nutrition facts for the model's prediction will appear here</p>
+          </div>
+        </div>
+        <div class="nutrition-cards" id="nutritionCards" hidden></div>
+      </div>
+
+    </section>
+
+    <!-- ---- CENTER: upload + controls ---- -->
+    <section class="panel panel--center" aria-label="Upload photo, choose model, and predict">
+      <div class="center-stack">
+
+        <div class="uploader" id="dropzone" tabindex="0" role="button" aria-label="Upload a food photo">
+          <input type="file" id="fileInput" accept="image/*" hidden />
+          <div class="uploader__preview" id="previewWrap">
+            <svg id="uploaderIcon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="uploader__icon">
+              <path d="M4 16.5V18a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <path d="M12 3v11.5M12 3 7.5 7.5M12 3l4.5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <img id="previewImg" alt="Uploaded food preview" hidden />
+          </div>
+          <p class="uploader__hint">Drag &amp; drop, or click to browse</p>
+        </div>
+
+        <div class="field-group">
+          <span class="field-group__label field-group__label--center">Model</span>
+          <div class="segmented" id="modelSelect" role="radiogroup" aria-label="Choose a model">
+            <button type="button" class="segmented__option" data-model="custom_cnn" role="radio" aria-checked="false">Custom CNN</button>
+            <button type="button" class="segmented__option" data-model="vgg16" role="radio" aria-checked="false">VGG16</button>
+            <button type="button" class="segmented__option" data-model="resnet50" role="radio" aria-checked="false">Resnet50</button>
+          </div>
+        </div>
+
+        <button type="button" class="btn btn--predict" id="predictBtn" disabled>
+          <span class="btn__label">Predict</span>
+          <span class="btn__spinner" aria-hidden="true"></span>
+        </button>
+
+        <div class="predict-banner" id="predictBanner" hidden>
+          <div class="predict-banner__gauge" id="predictBannerGauge">
+            <svg viewBox="0 0 64 64" class="gauge-ring" aria-hidden="true">
+              <circle class="gauge-ring__track" cx="32" cy="32" r="27"></circle>
+              <circle class="gauge-ring__fill" id="gaugeRingFill" cx="32" cy="32" r="27"></circle>
+            </svg>
+            <span class="predict-banner__gauge-value" id="gaugeValue"></span>
+          </div>
+          <div class="predict-banner__body" id="predictBannerBody"></div>
+        </div>
+
+        <p class="status-line" id="statusLine" role="status" aria-live="polite"></p>
+      </div>
+    </section>
+
+    <!-- ---- RIGHT: class picker + metrics ---- -->
+    <section class="panel panel--right" aria-label="Select the actual class and view model metrics">
+      <div class="class-picker-zone" id="classPickerZone">
+        <span class="field-group__label">Actual class <span class="field-group__hint">(34 classes)</span></span>
+        <div class="class-grid" id="classGrid" role="radiogroup" aria-label="Select the true class of the uploaded image">
+          <div class="class-col" id="classColA"></div>
+          <div class="class-col" id="classColB"></div>
+        </div>
+      </div>
+
+      <div class="class-picker-summary" id="classPickerSummary" hidden>
+        <span class="field-group__label">Actual class</span>
+        <div class="class-picker-summary__row">
+          <span class="class-picker-summary__value" id="classPickerSummaryValue"></span>
+          <button type="button" class="class-picker-summary__change" id="classPickerChangeBtn">Change</button>
+        </div>
+      </div>
+
+      <div class="metrics-zone" id="metricsZone">
+        <span class="field-group__label">Model metrics <span class="field-group__hint"></span></span>
+        <div class="split-placeholder split-placeholder--metrics" id="metricsPlaceholder">
+          <div class="split-placeholder__card split-placeholder__card--actual">
+            <div class="split-placeholder__eyebrow"><span class="dot"></span>Actual class</div>
+            <svg class="split-placeholder__glyph" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M8 32V20M20 32V8M32 32V16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+            <p>Metrics &amp; confusion matrix will appear here after you predict</p>
+          </div>
+          <div class="split-placeholder__card split-placeholder__card--predicted">
+            <div class="split-placeholder__eyebrow"><span class="dot"></span>Predicted class</div>
+            <svg class="split-placeholder__glyph" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M8 32V20M20 32V8M32 32V16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+            <p>Metrics &amp; confusion matrix will appear here after you predict</p>
+          </div>
+        </div>
+        <div class="metrics-cards" id="metricsCards" hidden></div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="app-footer">
+    <p>Custom CNN · VGG16 · ResNet50 &mdash; nutrition data and per-class metrics are read from local JSON files.</p>
+  </footer>
+
+</div>
+
+<script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>
