@@ -63,6 +63,12 @@ is missing, so the frontend can be exercised end-to-end before real weights are
 dropped in. Swap in real files under models/ and demo mode turns itself off.
 """
 
+import os
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
+
+import tensorflow as tf
 import json
 import os
 import random
