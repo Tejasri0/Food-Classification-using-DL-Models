@@ -1,100 +1,86 @@
 """
-Food Image Classification — Flask backend
-==========================================
+Food Image Classification — Flask backend using TensorFlow Lite
 
-Expected project layout
-------------------------
+Project structure:
 food-classifier/
 ├── app.py
-├── seed_redis.py           <- one-off script: loads data/*.json into Redis
-├── models/
-│   ├── custom_cnn.h5      <- your trained Keras/TensorFlow weight files
-│   ├── vgg16.h5
-│   └── resnet50.h5
-├── data/                   <- source-of-truth JSON files, used only to SEED
-│   │                          Redis (see seed_redis.py). At request time the
-│   │                          app reads exclusively from Redis, not disk.
-│   ├── nutritional_facts.json   <- {"Class Name": {"calories": ..., ...}, ...}
-│   ├── metrics_custom_cnn.json  <- {"Class Name": {"accuracy": ..., "precision": ..., "recall": ...,
-│   │                                  "f1_score": ..., "confusion_matrix": {"tp": ..., "fp": ...,
-│   │                                  "fn": ..., "tn": ...}}, ...}
-│   │                              (confusion_matrix is optional, one-vs-rest counts for that class;
-│   │                               omit it and the UI simply shows "no confusion matrix data")
+├── seed_redis.py
+├── models_tflite/
+│   ├── custom_cnn.tflite
+│   ├── vgg16.tflite
+│   └── resnet50.tflite
+├── data/
+│   ├── nutritional_facts.json
+│   ├── class_indices.json                 # recommended
+│   ├── metrics_custom_cnn.json
 │   ├── metrics_vgg16.json
-│   ├── metrics_resnet50.json
-│   └── class_indices.json       <- OPTIONAL {"Class Name": index, ...} matching the order
-│                                    your model was trained with (e.g. Keras
-│                                    ImageDataGenerator.class_indices). If this file
-│                                    is missing, class names are taken from
-│                                    nutritional_facts.json sorted alphabetically —
-│                                    make sure that matches your model's output order!
-├── templates/
-│   └── index.html
-└── static/
-    ├── css/style.css
-    └── js/script.js
+│   └── metrics_resnet50.json
+├── templates/index.html
+└── static/...
 
-Redis
------
-Nutrition facts and per-model metrics/confusion-matrix data are stored in
-Redis and fetched fresh every time a user hits "Predict" (no on-disk fallback
-and no long-lived in-process cache for this data, so updates pushed into
-Redis show up immediately). Configure the connection with:
+Install (TensorFlow CPU provides tf.lite.Interpreter):
+    pip install flask tensorflow-cpu numpy pillow redis gunicorn
 
-    REDIS_URL=redis://localhost:6379/0      (default if unset)
-    REDIS_KEY_PREFIX=food_classifier         (default if unset)
-
-Keys read at request time (all JSON-encoded strings):
-    {prefix}:nutrition_facts        -> {"Class Name": {...}, ...}
-    {prefix}:class_indices          -> {"Class Name": index, ...}   (optional)
-    {prefix}:metrics:<model_key>    -> {"Class Name": {...}, ...}   one per MODEL_KEYS
-
-Run `python seed_redis.py` once to load your existing data/*.json files into
-Redis under these keys (safe to re-run any time the JSON files change).
-
-Run
----
-    pip install flask tensorflow pillow numpy redis
-    python seed_redis.py   # first time only, or whenever data/*.json changes
+Set REDIS_URL to your Redis connection string before starting the app.
+Run:
+    python seed_redis.py
     python app.py
 
-The app starts in DEMO MODE automatically for any model whose .h5 weight file
-is missing, so the frontend can be exercised end-to-end before real weights are
-dropped in. Swap in real files under models/ and demo mode turns itself off.
+Important:
+- The preprocessing below assumes the models were trained with RGB images
+  resized to 256x256 and pixel values divided by 255.0.
+- Change MODEL_INPUT_SIZE or preprocessing if your training pipeline differed.
+- class_indices.json must map class names to the exact output indices used
+  during training, e.g. {"pizza": 0, "samosa": 1, ...}.
 """
 
-import os
-
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
-
-import tensorflow as tf
-tf.config.threading.set_intra_op_parallelism_threads(1)
-tf.config.threading.set_inter_op_parallelism_threads(1)
-
-import gc
 import json
 import os
 import random
+import threading
+
 import numpy as np
 import redis
-from tensorflow.keras.models import load_model
+import tensorflow as tf
 from flask import Flask, jsonify, render_template, request
+from PIL import Image, UnidentifiedImageError
+
 
 app = Flask(__name__)
 
 # ---------------------------------------------------------------------------
-# Paths & configuration
+# Paths and configuration
 # ---------------------------------------------------------------------------
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODELS_DIR = os.path.join(BASE_DIR, "models")
-DATA_DIR = os.path.join(BASE_DIR, "data")  # only used by seed_redis.py now
+DATA_DIR = os.path.join(BASE_DIR, "data")  # Used by seed_redis.py
 
 MODEL_KEYS = ("custom_cnn", "vgg16", "resnet50")
 
+MODEL_LABELS = {
+    "custom_cnn": "Custom CNN",
+    "vgg16": "VGG16",
+    "resnet50": "ResNet50",
+}
+
+MODEL_WEIGHTS = {
+    "custom_cnn": os.path.join(MODELS_DIR, "custom_cnn.tflite"),
+    "vgg16": os.path.join(MODELS_DIR, "vgg16.tflite"),
+    "resnet50": os.path.join(MODELS_DIR, "resnet50.tflite"),
+}
+
+# Set these to the dimensions used when training each model.
+MODEL_INPUT_SIZE = {
+    "custom_cnn": (256, 256),
+    "vgg16": (256, 256),
+    "resnet50": (256, 256),
+}
+
 # ---------------------------------------------------------------------------
-# Redis
+# Redis configuration
 # ---------------------------------------------------------------------------
+
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 REDIS_KEY_PREFIX = os.environ.get("REDIS_KEY_PREFIX", "food_classifier")
 
@@ -106,178 +92,316 @@ def metrics_key(model_key):
     return f"{REDIS_KEY_PREFIX}:metrics:{model_key}"
 
 
-# A single shared connection pool. decode_responses=True so GET returns str,
-# not bytes, which keeps json.loads() simple below.
-redis_client = redis.Redis.from_url(REDIS_URL, decode_responses=True)
+redis_client = redis.Redis.from_url(
+    REDIS_URL,
+    decode_responses=True,
+    socket_connect_timeout=5,
+    socket_timeout=5,
+    health_check_interval=30,
+)
 
-MODEL_LABELS = {
-    "custom_cnn": "Custom CNN",
-    "vgg16": "VGG16",
-    "resnet50": "ResNet50",
-}
+# ---------------------------------------------------------------------------
+# TFLite model cache
+# ---------------------------------------------------------------------------
 
-MODEL_WEIGHTS = {
-    "custom_cnn": os.path.join(MODELS_DIR, "custom_cnn.keras"),
-    "vgg16": os.path.join(MODELS_DIR, "vgg16.keras"),
-    "resnet50": os.path.join(MODELS_DIR, "resnet50.keras"),
-}
-
-# Input size each architecture expects. Adjust to match how you trained them.
-MODEL_INPUT_SIZE = {
-    "custom_cnn": (256, 256),
-    "vgg16": (256, 256),
-    "resnet50": (256, 256),
-}
-
-# Only the (heavy) Keras models get an in-process cache — loading a .keras
-# file from disk is expensive and models don't change between requests.
-_loaded_model = None
-_loaded_model_key = None
+# Models are loaded only when first selected. Each interpreter has its own
+# lock because a TFLite Interpreter should not be invoked concurrently.
+_loaded_models = {}
+_model_locks = {}
+_model_cache_lock = threading.Lock()
 
 
 class DataUnavailableError(RuntimeError):
-    """Raised when required JSON data can't be fetched from Redis."""
+    """Raised when required JSON data cannot be fetched from Redis."""
+
+
+def model_is_available(model_key):
+    return os.path.isfile(MODEL_WEIGHTS[model_key])
+
+
+def get_model(model_key):
+    """Lazily load and cache one TensorFlow Lite interpreter."""
+    if model_key not in MODEL_KEYS:
+        raise ValueError(f"Unknown model: {model_key}")
+
+    if model_key not in _loaded_models:
+        with _model_cache_lock:
+            # Check again after acquiring the lock.
+            if model_key not in _loaded_models:
+                model_path = MODEL_WEIGHTS[model_key]
+
+                if not os.path.isfile(model_path):
+                    raise FileNotFoundError(model_path)
+
+                interpreter = tf.lite.Interpreter(
+                    model_path=model_path,
+                    num_threads=2,
+                )
+                interpreter.allocate_tensors()
+
+                input_details = interpreter.get_input_details()
+                output_details = interpreter.get_output_details()
+
+                if len(input_details) != 1:
+                    raise RuntimeError(
+                        f"{model_key} has {len(input_details)} inputs; "
+                        "this app currently expects a single-input model."
+                    )
+
+                if len(output_details) != 1:
+                    raise RuntimeError(
+                        f"{model_key} has {len(output_details)} outputs; "
+                        "this app currently expects a single-output model."
+                    )
+
+                _loaded_models[model_key] = {
+                    "interpreter": interpreter,
+                    "input_details": input_details,
+                    "output_details": output_details,
+                }
+                _model_locks[model_key] = threading.Lock()
+
+    return _loaded_models[model_key]
 
 
 # ---------------------------------------------------------------------------
-# Data loading helpers — everything below reads straight from Redis, fresh,
-# on every call. There is deliberately no in-process cache for this data: it
-# is small, Redis is fast, and this guarantees a user hitting "Predict" (or
-# hitting /api/classes, /api/models) always sees whatever is currently in
-# Redis, even if it was updated moments ago.
+# Redis data helpers
 # ---------------------------------------------------------------------------
+
 def _redis_get_json(key):
     try:
         raw = redis_client.get(key)
     except redis.RedisError as exc:
-        raise DataUnavailableError(f"Could not reach Redis for key '{key}': {exc}") from exc
+        raise DataUnavailableError(
+            f"Could not reach Redis for key '{key}': {exc}"
+        ) from exc
 
     if raw is None:
-        raise DataUnavailableError(f"Redis key '{key}' is missing. Run seed_redis.py first.")
+        raise DataUnavailableError(
+            f"Redis key '{key}' is missing. Run seed_redis.py first."
+        )
 
     try:
         return json.loads(raw)
     except json.JSONDecodeError as exc:
-        raise DataUnavailableError(f"Redis key '{key}' does not contain valid JSON: {exc}") from exc
+        raise DataUnavailableError(
+            f"Redis key '{key}' does not contain valid JSON: {exc}"
+        ) from exc
 
 
 def load_nutrition():
-    """Fetch the full nutrition-facts dict from Redis."""
+    """Fetch nutrition facts from Redis."""
     return _redis_get_json(NUTRITION_KEY)
 
 
 def load_metrics(model_key):
-    """Fetch the per-class metrics dict for one model from Redis."""
+    """Fetch metrics for the selected model from Redis."""
     return _redis_get_json(metrics_key(model_key))
 
 
 def get_class_names():
-    """Ordered list of class names, index-aligned with model output.
+    """
+    Return class names in model-output order.
 
-    Prefers the {prefix}:class_indices Redis key (explicit, safest). Falls
-    back to the alphabetically-sorted keys of the nutrition-facts data.
+    Preferred: Redis class_indices mapping, such as {"class_a": 0, "class_b": 1}.
+    Fallback: alphabetical nutrition-facts keys. The fallback is only correct
+    if that alphabetical order matches the model's training class order.
     """
     try:
-        idx_map = _redis_get_json(CLASS_INDICES_KEY)
+        index_map = _redis_get_json(CLASS_INDICES_KEY)
     except DataUnavailableError:
         return sorted(load_nutrition().keys())
 
-    ordered = [None] * len(idx_map)
-    for name, idx in idx_map.items():
-        ordered[int(idx)] = name
-    return ordered
+    if not isinstance(index_map, dict) or not index_map:
+        raise DataUnavailableError(
+            f"Redis key '{CLASS_INDICES_KEY}' must contain a non-empty JSON object."
+        )
+
+    try:
+        indexed_names = [(int(index), name) for name, index in index_map.items()]
+        indexed_names.sort(key=lambda item: item[0])
+
+        expected_indices = list(range(len(indexed_names)))
+        actual_indices = [index for index, _ in indexed_names]
+
+        if actual_indices != expected_indices:
+            raise ValueError("Class indices must be consecutive integers starting at 0.")
+
+        return [name for _, name in indexed_names]
+
+    except (TypeError, ValueError) as exc:
+        raise DataUnavailableError(
+            f"Invalid class_indices data in Redis: {exc}"
+        ) from exc
 
 
 def _normalize_key(key):
-    """Lowercase and collapse spaces/hyphens to underscores, so 'F1 Score',
-    'f1-score', and 'f1_score' all compare equal."""
+    """Normalize metric keys such as 'F1 Score' and 'f1_score'."""
     return str(key).strip().lower().replace(" ", "_").replace("-", "_")
 
 
-def find_field(d, target_key, default=None):
-    """Case/format-tolerant dict lookup. Real-world metrics JSON is rarely
-    consistent about 'confusion_matrix' vs 'Confusion Matrix' vs
-    'confusion-matrix', so match on a normalized key instead of an exact
-    one. Falls back to `default` (mutated freshly each call, not shared)
-    if nothing matches."""
-    if not isinstance(d, dict):
+def find_field(data, target_key, default=None):
+    """Case- and format-tolerant dictionary lookup."""
+    if not isinstance(data, dict):
         return default
-    target_norm = _normalize_key(target_key)
-    for key, value in d.items():
-        if _normalize_key(key) == target_norm:
+
+    target = _normalize_key(target_key)
+    for key, value in data.items():
+        if _normalize_key(key) == target:
             return value
+
     return default
 
 
-def model_is_available(model_key):
-    return os.path.exists(MODEL_WEIGHTS[model_key])
+# ---------------------------------------------------------------------------
+# Image preprocessing and TFLite inference
+# ---------------------------------------------------------------------------
+
+def preprocess_image(file_stream, model_key, input_details):
+    """
+    Prepare an RGB image for the selected model.
+
+    This implementation matches a common Keras training pipeline:
+        image.resize((256, 256))
+        image.astype("float32") / 255.0
+
+    Quantized TFLite models are converted to their expected integer input
+    using the tensor's quantization scale and zero point.
+    """
+    width, height = MODEL_INPUT_SIZE[model_key]
+
+    with Image.open(file_stream) as image:
+        image = image.convert("RGB")
+        image = image.resize((width, height), Image.Resampling.BILINEAR)
+        array = np.asarray(image, dtype=np.float32)
+
+    # IMPORTANT: Keep this normalization consistent with training.
+    array = array / 255.0
+    array = np.expand_dims(array, axis=0)
+
+    input_info = input_details[0]
+    input_dtype = input_info["dtype"]
+
+    if np.issubdtype(input_dtype, np.integer):
+        scale, zero_point = input_info["quantization"]
+
+        if scale <= 0:
+            raise RuntimeError(
+                "The TFLite input is integer-quantized but has no valid "
+                "quantization scale. Check the model conversion."
+            )
+
+        array = np.round(array / scale + zero_point)
+        limits = np.iinfo(input_dtype)
+        array = np.clip(array, limits.min, limits.max).astype(input_dtype)
+    else:
+        array = array.astype(input_dtype)
+
+    return array
 
 
+def _dequantize_output(predictions, output_info):
+    """Convert quantized integer output tensors back to float values."""
+    output_dtype = output_info["dtype"]
 
-def get_model(model_key):
-    global _loaded_model, _loaded_model_key
+    if np.issubdtype(output_dtype, np.integer):
+        scale, zero_point = output_info["quantization"]
 
-    # Reuse the model if it is already loaded
-    if _loaded_model is not None and _loaded_model_key == model_key:
-        return _loaded_model
+        if scale > 0:
+            predictions = (
+                predictions.astype(np.float32) - zero_point
+            ) * scale
+        else:
+            predictions = predictions.astype(np.float32)
+    else:
+        predictions = predictions.astype(np.float32)
 
-    path = MODEL_WEIGHTS[model_key]
-
-    if not os.path.exists(path):
-        raise FileNotFoundError(path)
-
-    # Release the previously loaded model
-    if _loaded_model is not None:
-        del _loaded_model
-        _loaded_model = None
-        _loaded_model_key = None
-
-        tf.keras.backend.clear_session()
-        gc.collect()
-
-    # Load only the newly selected model
-    _loaded_model = load_model(path)
-    _loaded_model_key = model_key
-
-    return _loaded_model
-
-
-def preprocess_image(file_stream, model_key):
-    from PIL import Image
-
-    size = MODEL_INPUT_SIZE[model_key]
-    img = Image.open(file_stream).convert("RGB").resize(size)
-    arr = np.asarray(img, dtype="float32") / 255.0
-    return np.expand_dims(arr, axis=0)
+    return predictions
 
 
 def run_real_prediction(model_key, file_stream):
+    """Run inference using the selected TensorFlow Lite model."""
+    model_data = get_model(model_key)
 
-    model = get_model(model_key)
-    x = preprocess_image(file_stream, model_key)
-    preds = model.predict(x, verbose=0)[0]
+    interpreter = model_data["interpreter"]
+    input_details = model_data["input_details"]
+    output_details = model_data["output_details"]
+
+    image_array = preprocess_image(
+        file_stream,
+        model_key,
+        input_details,
+    )
+
+    # Protect this interpreter from simultaneous requests.
+    with _model_locks[model_key]:
+        interpreter.set_tensor(
+            input_details[0]["index"],
+            image_array,
+        )
+        interpreter.invoke()
+
+        predictions = interpreter.get_tensor(
+            output_details[0]["index"]
+        )
+
+    predictions = _dequantize_output(predictions, output_details[0])
+
+    if predictions.ndim == 2:
+        predictions = predictions[0]
+    elif predictions.ndim != 1:
+        raise RuntimeError(
+            f"Unexpected prediction output shape: {predictions.shape}"
+        )
+
     class_names = get_class_names()
-    idx = int(np.argmax(preds))
-    return class_names[idx], float(preds[idx])
+
+    if len(predictions) != len(class_names):
+        raise RuntimeError(
+            f"Model output has {len(predictions)} classes, but Redis contains "
+            f"{len(class_names)} class names. Check class_indices.json."
+        )
+
+    predicted_index = int(np.argmax(predictions))
+    predicted_class = class_names[predicted_index]
+    confidence = float(predictions[predicted_index])
+
+    return predicted_class, confidence
 
 
 def run_demo_prediction(model_key, filename):
-    """Deterministic pseudo-prediction used when a model's .h5 file isn't
-    present yet, so the UI/UX can be reviewed before training finishes."""
+    """
+    Deterministic placeholder prediction for UI testing only.
+
+    This is NOT a real model prediction and must not be used to evaluate
+    model accuracy.
+    """
     class_names = get_class_names()
+
+    if not class_names:
+        raise DataUnavailableError("No class names are available.")
+
     seed = f"{model_key}:{filename}"
     rng = random.Random(seed)
-    idx = rng.randrange(len(class_names))
+    index = rng.randrange(len(class_names))
     confidence = rng.uniform(0.62, 0.97)
-    return class_names[idx], confidence
+
+    return class_names[index], confidence
 
 
 # ---------------------------------------------------------------------------
-# Routes
+# Flask routes
 # ---------------------------------------------------------------------------
+
 @app.route("/")
 def index():
     return render_template("index.html")
+
+
+@app.route("/health")
+def health():
+    """Simple health endpoint for deployment checks."""
+    return jsonify({"status": "ok"}), 200
 
 
 @app.route("/api/classes")
@@ -286,21 +410,20 @@ def api_classes():
         return jsonify({"classes": get_class_names()})
     except DataUnavailableError as exc:
         return jsonify({"error": str(exc)}), 503
-    except Exception as exc:  # pragma: no cover
+    except Exception as exc:
+        app.logger.exception("Could not load class list")
         return jsonify({"error": f"Could not load class list: {exc}"}), 500
 
 
 @app.route("/api/models")
 def api_models():
-    return jsonify(
-        {
-            key: {
-                "label": MODEL_LABELS[key],
-                "available": model_is_available(key),
-            }
-            for key in MODEL_KEYS
+    return jsonify({
+        key: {
+            "label": MODEL_LABELS[key],
+            "available": model_is_available(key),
         }
-    )
+        for key in MODEL_KEYS
+    })
 
 
 @app.route("/api/predict", methods=["POST"])
@@ -312,29 +435,45 @@ def api_predict():
     actual_class = request.form.get("actual_class")
 
     if model_key not in MODEL_KEYS:
-        return jsonify({"error": "Please choose a model."}), 400
+        return jsonify({"error": "Please choose a valid model."}), 400
+
     if not actual_class:
         return jsonify({"error": "Please choose the actual class name."}), 400
 
     image_file = request.files["image"]
 
     try:
-        # Pulled fresh from Redis on every click of "Predict".
+        # Fetch data from Redis on every prediction request.
         nutrition = load_nutrition()
         metrics = load_metrics(model_key)
 
         if actual_class not in nutrition:
             return jsonify({"error": f"Unknown class: {actual_class}"}), 400
 
+        # Check that the uploaded file is a valid image.
+        try:
+            image_file.stream.seek(0)
+            with Image.open(image_file.stream) as test_image:
+                test_image.verify()
+            image_file.stream.seek(0)
+        except (UnidentifiedImageError, OSError, ValueError):
+            return jsonify({"error": "The uploaded file is not a valid image."}), 400
+
         demo_mode = not model_is_available(model_key)
+
         if demo_mode:
             predicted_class, confidence = run_demo_prediction(
-                model_key, image_file.filename
+                model_key,
+                image_file.filename,
             )
         else:
             predicted_class, confidence = run_real_prediction(
-                model_key, image_file.stream
+                model_key,
+                image_file.stream,
             )
+
+        predicted_class_metrics = metrics.get(predicted_class, {})
+        actual_class_metrics = metrics.get(actual_class, {})
 
         response = {
             "demo_mode": demo_mode,
@@ -345,24 +484,35 @@ def api_predict():
             "is_correct": predicted_class == actual_class,
             "predicted_nutrition": nutrition.get(predicted_class, {}),
             "actual_nutrition": nutrition.get(actual_class, {}),
-            "predicted_metrics": metrics.get(predicted_class, {}),
-            "actual_metrics": metrics.get(actual_class, {}),
+            "predicted_metrics": predicted_class_metrics,
+            "actual_metrics": actual_class_metrics,
             "predicted_confusion_matrix": find_field(
-                metrics.get(predicted_class, {}), "confusion_matrix", {}
+                predicted_class_metrics,
+                "confusion_matrix",
+                {},
             ),
             "actual_confusion_matrix": find_field(
-                metrics.get(actual_class, {}), "confusion_matrix", {}
+                actual_class_metrics,
+                "confusion_matrix",
+                {},
             ),
         }
-        return jsonify(response)
+
+        return jsonify(response), 200
 
     except DataUnavailableError as exc:
         return jsonify({"error": str(exc)}), 503
     except FileNotFoundError as exc:
         return jsonify({"error": f"Required model file missing: {exc}"}), 500
-    except Exception as exc:  # pragma: no cover
+    except Exception as exc:
+        app.logger.exception("Prediction failed")
         return jsonify({"error": f"Prediction failed: {exc}"}), 500
 
 
 if __name__ == "__main__":
-    app.run(debug=False, host="0.0.0.0", port=5002)
+    # Render/Gunicorn uses its own server command; this is for local testing.
+    app.run(
+        debug=False,
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", 5002)),
+    )
