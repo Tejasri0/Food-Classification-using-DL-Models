@@ -69,6 +69,10 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
 import tensorflow as tf
+tf.config.threading.set_intra_op_parallelism_threads(1)
+tf.config.threading.set_inter_op_parallelism_threads(1)
+
+import gc
 import json
 import os
 import random
@@ -127,7 +131,8 @@ MODEL_INPUT_SIZE = {
 
 # Only the (heavy) Keras models get an in-process cache — loading a .keras
 # file from disk is expensive and models don't change between requests.
-_loaded_models = {}
+_loaded_model = None
+_loaded_model_key = None
 
 
 class DataUnavailableError(RuntimeError):
@@ -208,15 +213,33 @@ def model_is_available(model_key):
     return os.path.exists(MODEL_WEIGHTS[model_key])
 
 
-def get_model(model_key):
-    """Lazily load (and cache) a Keras model. Raises if weights are missing."""
-    if model_key not in _loaded_models:  # local import: slow
 
-        path = MODEL_WEIGHTS[model_key]
-        if not os.path.exists(path):
-            raise FileNotFoundError(path)
-        _loaded_models[model_key] = load_model(path)
-    return _loaded_models[model_key]
+def get_model(model_key):
+    global _loaded_model, _loaded_model_key
+
+    # Reuse the model if it is already loaded
+    if _loaded_model is not None and _loaded_model_key == model_key:
+        return _loaded_model
+
+    path = MODEL_WEIGHTS[model_key]
+
+    if not os.path.exists(path):
+        raise FileNotFoundError(path)
+
+    # Release the previously loaded model
+    if _loaded_model is not None:
+        del _loaded_model
+        _loaded_model = None
+        _loaded_model_key = None
+
+        tf.keras.backend.clear_session()
+        gc.collect()
+
+    # Load only the newly selected model
+    _loaded_model = load_model(path)
+    _loaded_model_key = model_key
+
+    return _loaded_model
 
 
 def preprocess_image(file_stream, model_key):
